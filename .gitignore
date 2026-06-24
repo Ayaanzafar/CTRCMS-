@@ -8,3 +8,5 @@ uploads/
 .DS_Store
 coverage/
 .vite/
+
+.cursor/
