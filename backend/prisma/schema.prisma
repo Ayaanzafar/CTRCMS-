@@ -1,0 +1,402 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ModuleAccess {
+  NONE
+  READ
+  WRITE
+  FULL
+}
+
+model Role {
+  id          String                 @id @default(cuid())
+  code        String                 @unique
+  name        String
+  description String?
+  users       User[]
+  permissions RoleModulePermission[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  fullName     String
+  isActive     Boolean    @default(true)
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id])
+  auditLogs    AuditLog[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([roleId])
+}
+
+model RoleModulePermission {
+  id     String       @id @default(cuid())
+  roleId String
+  role   Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module String
+  access ModuleAccess @default(NONE)
+
+  @@unique([roleId, module])
+  @@index([module])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String?
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  COMPLAINT_CREATED
+  QC_FAILED
+}
+
+model SystemNotification {
+  id         String           @id @default(cuid())
+  type       NotificationType
+  title      String
+  message    String
+  entityType String?
+  entityId   String?
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([isRead])
+}
+
+enum CoilDocumentType {
+  MTC
+  INVOICE
+  OTHER
+}
+
+enum CoilStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model Coil {
+  coilNumber                String         @id
+  grade                     String
+  coating                   String
+  size                      String
+  weight                    Decimal        @db.Decimal(10, 3)
+  supplier                  String         @default("AMNS (Hazira Plant)")
+  mtcNumber                 String?
+  invoiceNumber             String?
+  amnsDispatchDate          DateTime?
+  vehicleNumber             String?
+  transporterName           String?
+  receiptDateSlitter        DateTime?
+  receivingConditionRemarks String?
+  status                    CoilStatus     @default(ACTIVE)
+  archivedAt                DateTime?
+  archivedById              String?
+  documents                 CoilDocument[]
+  slittingRecords           SlittingRecord[]
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
+
+  @@index([grade])
+  @@index([supplier])
+  @@index([amnsDispatchDate])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model CoilDocument {
+  id           String           @id @default(cuid())
+  coilNumber   String
+  coil         Coil             @relation(fields: [coilNumber], references: [coilNumber], onDelete: Cascade)
+  documentType CoilDocumentType
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  storagePath  String
+  uploadedById String?
+  createdAt    DateTime         @default(now())
+
+  @@index([coilNumber])
+  @@index([documentType])
+}
+
+model SlittingRecord {
+  slitCoilId       String   @id
+  parentCoilNumber String
+  parentCoil       Coil     @relation(fields: [parentCoilNumber], references: [coilNumber], onDelete: Restrict)
+  slitWidthSize    String
+  slittingDate     DateTime
+  slitCoilWeight   Decimal  @db.Decimal(10, 3)
+  slitterLocation  String   @default("Shiv Sagar Slitter")
+  dispatchNote     String?
+  vehicleNumber    String?
+  transporterName  String?
+  sunrackReceipt   SunrackReceipt?
+  batchConsumptions BatchSlitCoilMap[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([parentCoilNumber])
+  @@index([slittingDate])
+  @@index([dispatchNote])
+}
+
+enum InspectionResult {
+  PENDING
+  PASS
+  CONDITIONAL
+  FAIL
+}
+
+model SunrackReceipt {
+  id                    String             @id @default(cuid())
+  slitCoilId            String             @unique
+  slitCoil              SlittingRecord     @relation(fields: [slitCoilId], references: [slitCoilId], onDelete: Restrict)
+  receiptDateSunrack    DateTime
+  storageLocationBin    String
+  inspectionResult      InspectionResult   @default(PENDING)
+  inspectionRemarks     String?
+  confirmedDispatchNote String?
+  photos                SunrackReceiptPhoto[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([receiptDateSunrack])
+  @@index([storageLocationBin])
+  @@index([inspectionResult])
+}
+
+model SunrackReceiptPhoto {
+  id           String         @id @default(cuid())
+  receiptId    String
+  receipt      SunrackReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  storagePath  String
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+
+  @@index([receiptId])
+}
+
+model ProductionBatch {
+  batchNumber           String             @id
+  productionOrderNumber String
+  productType           String
+  quantityProduced      Decimal            @db.Decimal(10, 3)
+  productionDate        DateTime
+  operatorShift         String
+  slitCoilConsumptions  BatchSlitCoilMap[]
+  qcInspections         QCInspection[]
+  dispatchLines         DispatchBatchLine[]
+  complaintLines        ComplaintBatchLine[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([productionOrderNumber])
+  @@index([productType])
+  @@index([productionDate])
+}
+
+model BatchSlitCoilMap {
+  id                String          @id @default(cuid())
+  batchNumber       String
+  batch             ProductionBatch @relation(fields: [batchNumber], references: [batchNumber], onDelete: Cascade)
+  slitCoilId        String
+  slitCoil          SlittingRecord  @relation(fields: [slitCoilId], references: [slitCoilId], onDelete: Restrict)
+  quantityConsumed  Decimal         @db.Decimal(10, 3)
+  createdAt         DateTime        @default(now())
+
+  @@unique([batchNumber, slitCoilId])
+  @@index([slitCoilId])
+  @@index([batchNumber])
+}
+
+enum QcResult {
+  PASS
+  FAIL
+  REWORK
+}
+
+model QCInspection {
+  id             String              @id @default(cuid())
+  batchNumber    String
+  batch          ProductionBatch     @relation(fields: [batchNumber], references: [batchNumber], onDelete: Cascade)
+  qcResult       QcResult
+  inspectorName  String
+  inspectionDate DateTime
+  qcRemarks      String?
+  photos         QCInspectionPhoto[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([batchNumber])
+  @@index([inspectionDate])
+  @@index([qcResult])
+}
+
+model QCInspectionPhoto {
+  id           String       @id @default(cuid())
+  inspectionId String
+  inspection   QCInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  storagePath  String
+  uploadedById String?
+  createdAt    DateTime     @default(now())
+
+  @@index([inspectionId])
+}
+
+model SiteDispatch {
+  dispatchNoteNumber String              @id
+  dispatchDate       DateTime
+  vehicleNumber      String?
+  transporterName    String?
+  projectName        String
+  clientName         String
+  siteLocation       String
+  batchLines         DispatchBatchLine[]
+  siteInstallation   SiteInstallation?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([dispatchDate])
+  @@index([projectName])
+  @@index([clientName])
+}
+
+model DispatchBatchLine {
+  id                 String          @id @default(cuid())
+  dispatchNoteNumber String
+  dispatch           SiteDispatch    @relation(fields: [dispatchNoteNumber], references: [dispatchNoteNumber], onDelete: Cascade)
+  batchNumber        String
+  batch              ProductionBatch @relation(fields: [batchNumber], references: [batchNumber], onDelete: Restrict)
+  quantityDispatched Decimal         @db.Decimal(10, 3)
+  createdAt          DateTime        @default(now())
+
+  @@unique([dispatchNoteNumber, batchNumber])
+  @@index([batchNumber])
+  @@index([dispatchNoteNumber])
+}
+
+model SiteInstallation {
+  id                  String                  @id @default(cuid())
+  dispatchNoteNumber  String                  @unique
+  dispatch            SiteDispatch            @relation(fields: [dispatchNoteNumber], references: [dispatchNoteNumber], onDelete: Restrict)
+  siteReceiptDate     DateTime
+  installationDate    DateTime
+  installerEpcPartner String
+  quantityInstalled   Decimal                 @db.Decimal(10, 3)
+  photos              SiteInstallationPhoto[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([siteReceiptDate])
+  @@index([installationDate])
+}
+
+model SiteInstallationPhoto {
+  id             String           @id @default(cuid())
+  installationId String
+  installation   SiteInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  filename       String
+  originalName   String
+  mimetype       String
+  size           Int
+  storagePath    String
+  uploadedById   String?
+  createdAt      DateTime         @default(now())
+
+  @@index([installationId])
+}
+
+enum ResolutionStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  CLOSED
+}
+
+enum ResponsibleStage {
+  AMNS
+  SLITTER
+  SUNRACK_PRODUCTION
+  TRANSPORT
+  SITE_HANDLING
+}
+
+model Complaint {
+  complaintId          String             @id
+  complaintDate        DateTime
+  projectName          String
+  clientName           String
+  siteLocation         String
+  complaintDescription String
+  rootCauseRemarks     String?
+  resolutionStatus     ResolutionStatus   @default(OPEN)
+  resolutionDate       DateTime?
+  responsibleStage     ResponsibleStage?
+  batchLines           ComplaintBatchLine[]
+  photos               ComplaintPhoto[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([complaintDate])
+  @@index([resolutionStatus])
+  @@index([projectName])
+}
+
+model ComplaintBatchLine {
+  id          String          @id @default(cuid())
+  complaintId String
+  complaint   Complaint       @relation(fields: [complaintId], references: [complaintId], onDelete: Cascade)
+  batchNumber String
+  batch       ProductionBatch @relation(fields: [batchNumber], references: [batchNumber], onDelete: Restrict)
+  createdAt   DateTime        @default(now())
+
+  @@unique([complaintId, batchNumber])
+  @@index([batchNumber])
+  @@index([complaintId])
+}
+
+model ComplaintPhoto {
+  id           String    @id @default(cuid())
+  complaintId  String
+  complaint    Complaint @relation(fields: [complaintId], references: [complaintId], onDelete: Cascade)
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  storagePath  String
+  uploadedById String?
+  createdAt    DateTime  @default(now())
+
+  @@index([complaintId])
+}

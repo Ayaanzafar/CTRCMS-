@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ctrcms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ctrcms
+      POSTGRES_PASSWORD: ctrcms_dev_password
+      POSTGRES_DB: ctrcms
+    ports:
+      - "5435:5432"
+    volumes:
+      - ctrcms_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctrcms -d ctrcms"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ctrcms_pg_data:

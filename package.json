@@ -1,0 +1,17 @@
+{
+  "name": "ctrcms",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "backend:install": "cd backend && npm install",
+    "backend:setup": "cd backend && npm run db:setup",
+    "backend:dev": "cd backend && npm run dev",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:dev": "cd frontend && npm run dev",
+    "setup": "npm run db:up && npm run backend:install && npm run frontend:install && npm run backend:setup",
+    "dev:backend": "npm run backend:dev",
+    "dev:frontend": "npm run frontend:dev"
+  }
+}
