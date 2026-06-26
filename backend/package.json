@@ -1,6 +1,7 @@
 {
   "name": "ctrcms-backend",
   "version": "0.1.0",
+  "description": "Legacy Express API — deprecated; use backend-go. Retained for Prisma schema/seed.",
   "private": true,
   "type": "module",
   "scripts": {
